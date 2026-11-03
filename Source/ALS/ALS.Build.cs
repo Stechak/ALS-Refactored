@@ -2,32 +2,34 @@ using UnrealBuildTool;
 
 public class ALS : ModuleRules
 {
-	public ALS(ReadOnlyTargetRules Target) : base(Target)
+	public ALS(ReadOnlyTargetRules target) : base(target)
 	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 
-		bEnableNonInlinedGenCppWarnings = true;
-		// UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+		// if (Target.bBuildEditor)
+		// {
+		// 	// Verify that all source files include all required dependencies.
+		//
+		// 	bUseUnity = false;
+		// 	PCHUsage = PCHUsageMode.NoPCHs;
+		// }
 
-		PublicDependencyModuleNames.AddRange(new[]
-		{
+		// CppCompileWarningSettings.UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+		CppCompileWarningSettings.NonInlinedGenCppWarningLevel = WarningLevel.Warning;
+
+		PublicDependencyModuleNames.AddRange([
 			"Core", "CoreUObject", "Engine", "GameplayTags", "AnimGraphRuntime", "RigVM", "ControlRig"
-		});
+		]);
 
-		PrivateDependencyModuleNames.AddRange(new[]
-		{
+		PrivateDependencyModuleNames.AddRange([
 			"EngineSettings", "NetCore", "PhysicsCore", "Niagara"
-		});
+		]);
 
-		if (Target.Type == TargetRules.TargetType.Editor)
+		if (Target.bBuildEditor)
 		{
-			PrivateDependencyModuleNames.AddRange(new[]
-			{
+			PrivateDependencyModuleNames.AddRange([
 				"MessageLog"
-			});
+			]);
 		}
-
-		SetupIrisSupport(Target);
 	}
 }

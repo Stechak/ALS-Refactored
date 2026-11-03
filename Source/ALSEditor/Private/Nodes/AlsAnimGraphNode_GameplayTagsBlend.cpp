@@ -13,7 +13,7 @@ UAlsAnimGraphNode_GameplayTagsBlend::UAlsAnimGraphNode_GameplayTagsBlend()
 
 void UAlsAnimGraphNode_GameplayTagsBlend::PostEditChangeProperty(FPropertyChangedEvent& ChangedEvent)
 {
-	if (ChangedEvent.GetPropertyName() == GET_MEMBER_NAME_STRING_VIEW_CHECKED(FAlsAnimNode_GameplayTagsBlend, Tags))
+	if (ChangedEvent.GetPropertyName() == GET_MEMBER_NAME_ANSI_STRING_VIEW_CHECKED(FAlsAnimNode_GameplayTagsBlend, Tags))
 	{
 		ReconstructNode();
 	}
@@ -38,9 +38,14 @@ void UAlsAnimGraphNode_GameplayTagsBlend::ReallocatePinsDuringReconstruction(TAr
 	Super::ReallocatePinsDuringReconstruction(PreviousPins);
 }
 
+FText UAlsAnimGraphNode_GameplayTagsBlend::GetMenuCategory() const
+{
+	return LOCTEXT("Category", "ALS");
+}
+
 FString UAlsAnimGraphNode_GameplayTagsBlend::GetNodeCategory() const
 {
-	return FString{TEXTVIEW("ALS")};
+	return GetMenuCategory().ToString();
 }
 
 void UAlsAnimGraphNode_GameplayTagsBlend::CustomizePinData(UEdGraphPin* Pin, const FName SourcePropertyName, const int32 PinIndex) const
@@ -66,13 +71,13 @@ void UAlsAnimGraphNode_GameplayTagsBlend::CustomizePinData(UEdGraphPin* Pin, con
 	{
 		static const FTextFormat BlendPosePinFormat{LOCTEXT("Pose", "{PinName} Pose")};
 
-		Pin->PinFriendlyName = FText::Format(BlendPosePinFormat, {{FString{TEXTVIEW("PinName")}, Pin->PinFriendlyName}});
+		Pin->PinFriendlyName = FText::Format(BlendPosePinFormat, {{FString{ANSITEXTVIEW("PinName")}, Pin->PinFriendlyName}});
 	}
 	else if (bBlendTimePin)
 	{
 		static const FTextFormat BlendTimePinFormat{LOCTEXT("BlendTime", "{PinName} Blend Time")};
 
-		Pin->PinFriendlyName = FText::Format(BlendTimePinFormat, {{FString{TEXTVIEW("PinName")}, Pin->PinFriendlyName}});
+		Pin->PinFriendlyName = FText::Format(BlendTimePinFormat, {{FString{ANSITEXTVIEW("PinName")}, Pin->PinFriendlyName}});
 	}
 }
 
@@ -88,7 +93,7 @@ void UAlsAnimGraphNode_GameplayTagsBlend::GetBlendPinProperties(const UEdGraphPi
 		return;
 	}
 
-	const auto PinName{PinFullName.Left(SeparatorIndex)};
+	const auto PinName{TStringView{PinFullName}.Left(SeparatorIndex)};
 	bBlendPosePin = PinName == TEXTVIEW("BlendPose");
 	bBlendTimePin = PinName == TEXTVIEW("BlendTime");
 }

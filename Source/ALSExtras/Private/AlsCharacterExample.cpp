@@ -11,7 +11,7 @@
 
 AAlsCharacterExample::AAlsCharacterExample()
 {
-	Camera = CreateDefaultSubobject<UAlsCameraComponent>(FName{TEXTVIEW("Camera")});
+	Camera = CreateDefaultSubobject<UAlsCameraComponent>(FName{ANSITEXTVIEW("Camera")});
 	Camera->SetupAttachment(GetMesh());
 	Camera->SetRelativeRotation_Direct({0.0f, 90.0f, 0.0f});
 }
@@ -108,7 +108,17 @@ void AAlsCharacterExample::Input_OnMove(const FInputActionValue& ActionValue)
 {
 	const auto Value{UAlsVector::ClampMagnitude012D(ActionValue.Get<FVector2D>())};
 
-	const auto ForwardDirection{UAlsVector::AngleToDirectionXY(UE_REAL_TO_FLOAT(GetViewState().Rotation.Yaw))};
+	auto ViewRotation{GetViewState().Rotation};
+
+	if (IsValid(GetController()))
+	{
+		// Use exact camera rotation instead of target rotation whenever possible.
+
+		FVector ViewLocation;
+		GetController()->GetPlayerViewPoint(ViewLocation, ViewRotation);
+	}
+
+	const auto ForwardDirection{UAlsVector::AngleToDirectionXY(UE_REAL_TO_FLOAT(ViewRotation.Yaw))};
 	const auto RightDirection{UAlsVector::PerpendicularCounterClockwiseXY(ForwardDirection)};
 
 	AddMovementInput(ForwardDirection * Value.Y + RightDirection * Value.X);
@@ -152,7 +162,7 @@ void AAlsCharacterExample::Input_OnJump(const FInputActionValue& ActionValue)
 			return;
 		}
 
-		if (StartMantlingGrounded())
+		if (StartMantling())
 		{
 			return;
 		}
@@ -188,7 +198,7 @@ void AAlsCharacterExample::Input_OnRoll()
 {
 	static constexpr auto PlayRate{1.3f};
 
-	StartRolling(PlayRate);
+	StartRollingGrounded(PlayRate);
 }
 
 void AAlsCharacterExample::Input_OnRotationMode()

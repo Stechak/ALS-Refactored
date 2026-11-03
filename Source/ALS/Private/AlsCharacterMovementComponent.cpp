@@ -17,7 +17,7 @@ void FAlsCharacterNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Ch
 {
 	Super::ClientFillNetworkMoveData(Move, MoveType);
 
-	const auto& SavedMove{static_cast<const FAlsSavedMove&>(Move)};
+	const auto& SavedMove{static_cast<const FAlsSavedMove&>(Move)}; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
 
 	RotationMode = SavedMove.RotationMode;
 	Stance = SavedMove.Stance;
@@ -68,7 +68,7 @@ void FAlsSavedMove::SetMoveFor(ACharacter* Character, const float NewDeltaTime, 
 
 bool FAlsSavedMove::CanCombineWith(const FSavedMovePtr& NewMovePtr, ACharacter* Character, const float MaxDeltaTime) const
 {
-	const auto* NewMove{static_cast<FAlsSavedMove*>(NewMovePtr.Get())};
+	const auto* NewMove{static_cast<FAlsSavedMove*>(NewMovePtr.Get())}; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
 
 	return RotationMode == NewMove->RotationMode &&
 	       Stance == NewMove->Stance &&
@@ -185,15 +185,15 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 bool UAlsCharacterMovementComponent::CanEditChange(const FProperty* Property) const
 {
 	return Super::CanEditChange(Property) &&
-	       Property->GetFName() != GET_MEMBER_NAME_STRING_VIEW_CHECKED(ThisClass, RotationRate) &&
-	       Property->GetFName() != GET_MEMBER_NAME_STRING_VIEW_CHECKED(ThisClass, bUseControllerDesiredRotation) &&
-	       Property->GetFName() != GET_MEMBER_NAME_STRING_VIEW_CHECKED(ThisClass, bOrientRotationToMovement);
+	       Property->GetFName() != GET_MEMBER_NAME_ANSI_STRING_VIEW_CHECKED(ThisClass, RotationRate) &&
+	       Property->GetFName() != GET_MEMBER_NAME_ANSI_STRING_VIEW_CHECKED(ThisClass, bUseControllerDesiredRotation) &&
+	       Property->GetFName() != GET_MEMBER_NAME_ANSI_STRING_VIEW_CHECKED(ThisClass, bOrientRotationToMovement);
 }
 #endif
 
 void UAlsCharacterMovementComponent::BeginPlay()
 {
-	ALS_ENSURE_MESSAGE(!bUseControllerDesiredRotation && !bOrientRotationToMovement,
+	ALS_ENSURE_MESSAGE(!bUseControllerDesiredRotation && !bOrientRotationToMovement, // NOLINT(clang-diagnostic-unused-value)
 	                   TEXT("These settings are not allowed and must be turned off!"));
 
 	Super::BeginPlay();
@@ -205,14 +205,15 @@ FVector UAlsCharacterMovementComponent::ConsumeInputVector()
 
 	if (bInputBlocked)
 	{
-		return FVector::ZeroVector;
+		InputVector = FVector::ZeroVector;
+		return InputVector;
 	}
 
-	FRotator BaseRotationSpeed;
-	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseRotationSpeed(CharacterOwner->GetBasedMovement(), BaseRotationSpeed))
+	FVector AngularVelocity;
+	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseAngularVelocity(CharacterOwner->GetBasedMovement(), AngularVelocity))
 	{
-		// Offset the input vector to keep it relative to the movement base.
-		InputVector = (BaseRotationSpeed * GetWorld()->GetDeltaSeconds()).RotateVector(InputVector);
+		// Offset the input to keep it in the movement base space.
+		InputVector = FQuat::MakeFromRotationVector(AngularVelocity * GetWorld()->GetDeltaSeconds()).RotateVector(InputVector);
 	}
 
 	return InputVector;
@@ -251,19 +252,19 @@ void UAlsCharacterMovementComponent::UpdateBasedRotation(FRotator& FinalRotation
 	FVector MovementBaseLocation;
 	FQuat MovementBaseRotation;
 
-	MovementBaseUtility::GetMovementBaseTransform(BasedMovement.MovementBase, BasedMovement.BoneName,
+	MovementBaseUtility::GetMovementBaseTransform(&BasedMovement.MovementBaseInterfaceData, BasedMovement.BoneName,
 	                                              MovementBaseLocation, MovementBaseRotation);
 
 	if (!OldBaseQuat.Equals(MovementBaseRotation, UE_SMALL_NUMBER))
 	{
 		const auto DeltaRotation{(MovementBaseRotation * OldBaseQuat.Inverse()).Rotator()};
-		auto NewControlRotation{CharacterOwner->Controller->GetControlRotation()};
+		auto NewControlRotation{CharacterOwner->GetController()->GetControlRotation()};
 
 		NewControlRotation.Pitch += DeltaRotation.Pitch;
 		NewControlRotation.Yaw += DeltaRotation.Yaw;
 		NewControlRotation.Normalize();
 
-		CharacterOwner->Controller->SetControlRotation(NewControlRotation);
+		CharacterOwner->GetController()->SetControlRotation(NewControlRotation);
 	}
 }
 
@@ -278,11 +279,11 @@ bool UAlsCharacterMovementComponent::ApplyRequestedMove(const float DeltaTime, c
 void UAlsCharacterMovementComponent::CalcVelocity(const float DeltaTime, const float Friction,
                                                   const bool bFluid, const float BrakingDeceleration)
 {
-	FRotator BaseRotationSpeed;
-	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseRotationSpeed(CharacterOwner->GetBasedMovement(), BaseRotationSpeed))
+	FVector AngularVelocity;
+	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseAngularVelocity(CharacterOwner->GetBasedMovement(), AngularVelocity))
 	{
-		// Offset the velocity to keep it relative to the movement base.
-		Velocity = (BaseRotationSpeed * DeltaTime).RotateVector(Velocity);
+		// Offset the velocity to keep it in the movement base space.
+		Velocity = FQuat::MakeFromRotationVector(AngularVelocity * DeltaTime).RotateVector(Velocity);
 	}
 
 	Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
@@ -313,7 +314,7 @@ void UAlsCharacterMovementComponent::PhysicsRotation(const float DeltaTime)
 {
 	Super::PhysicsRotation(DeltaTime);
 
-	if (HasValidData() && (bRunPhysicsWithNoController || IsValid(CharacterOwner->Controller)))
+	if (HasValidData() && (bRunPhysicsWithNoController || IsValid(CharacterOwner->GetController())))
 	{
 		OnPhysicsRotation.Broadcast(DeltaTime);
 	}
@@ -347,7 +348,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 		return;
 	}
 
-	if (!CharacterOwner || (!CharacterOwner->Controller && !bRunPhysicsWithNoController && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && (CharacterOwner->GetLocalRole() != ROLE_SimulatedProxy)))
+	if (!CharacterOwner || (!CharacterOwner->GetController() && !bRunPhysicsWithNoController && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && (CharacterOwner->GetLocalRole() != ROLE_SimulatedProxy)))
 	{
 		Acceleration = FVector::ZeroVector;
 		Velocity = FVector::ZeroVector;
@@ -371,16 +372,22 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 	const uint8 StartingCustomMovementMode = CustomMovementMode;
 
 	// Perform the move
-	while ( (remainingTime >= MIN_TICK_TIME) && (Iterations < MaxSimulationIterations) && CharacterOwner && (CharacterOwner->Controller || bRunPhysicsWithNoController || HasAnimRootMotion() || CurrentRootMotion.HasOverrideVelocity() || (CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)) )
+	while ( (remainingTime >= MIN_TICK_TIME) && (Iterations < MaxSimulationIterations) && CharacterOwner && (CharacterOwner->GetController() || bRunPhysicsWithNoController || HasAnimRootMotion() || CurrentRootMotion.HasOverrideVelocity() || (CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)) )
 	{
 		Iterations++;
 		bJustTeleported = false;
 		const float timeTick = GetSimulationTimeStep(remainingTime, Iterations);
 		remainingTime -= timeTick;
 
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+		//Scale down impact force if CharacterMoveComponent is taking multiple substeps.
+		const float LastFrameDt = GetWorld()->GetDeltaSeconds();
+		PhysicsForceSubsteppingFactor = timeTick / LastFrameDt;
+#endif
+
 		// Save current values
-		UPrimitiveComponent * const OldBase = GetMovementBase();
-		const FVector PreviousBaseLocation = (OldBase != NULL) ? OldBase->GetComponentLocation() : FVector::ZeroVector;
+		FMovementBaseInterfaceData* OldMovementBaseInterfaceData = GetMovementBaseInterfaceData_Mutable();
+		const FVector PreviousBaseLocation = OldMovementBaseInterfaceData && OldMovementBaseInterfaceData->IsValid() ? OldMovementBaseInterfaceData->GetBodyInstanceOwner()->GetPhysicsOwnerTransform().GetLocation() : FVector::ZeroVector;
 		const FVector OldLocation = UpdatedComponent->GetComponentLocation();
 		const FFindFloorResult OldFloor = CurrentFloor;
 
@@ -470,7 +477,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 			if ( !NewDelta.IsZero() )
 			{
 				// first revert this move
-				RevertMove(OldLocation, OldBase, PreviousBaseLocation, OldFloor, false);
+				RevertMove(OldLocation, OldMovementBaseInterfaceData, PreviousBaseLocation, OldFloor, false);
 
 				// avoid repeated ledge moves if the first one fails
 				bTriedLedgeMove = true;
@@ -485,7 +492,8 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 			{
 				// see if it is OK to jump
 				// @todo collision : only thing that can be problem is that oldbase has world collision on
-				bool bMustJump = bZeroDelta || (OldBase == NULL || (!OldBase->IsQueryCollisionEnabled() && MovementBaseUtility::IsDynamicBase(OldBase)));
+				const bool bOldMovementBaseValid = OldMovementBaseInterfaceData && OldMovementBaseInterfaceData->IsValid();
+				bool bMustJump = bZeroDelta || (!bOldMovementBaseValid || (!CollisionEnabledHasQuery(OldMovementBaseInterfaceData->GetBodyInstanceOwner()->GetCollisionEnabled()) && MovementBaseUtility::IsDynamicBase(OldMovementBaseInterfaceData)));
 				if ( (bMustJump || !bCheckedFall) && CheckFall(OldFloor, CurrentFloor.HitResult, Delta, OldLocation, remainingTime, timeTick, Iterations, bMustJump) )
 				{
 					return;
@@ -493,7 +501,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 				bCheckedFall = true;
 
 				// revert this move
-				RevertMove(OldLocation, OldBase, PreviousBaseLocation, OldFloor, true);
+				RevertMove(OldLocation, OldMovementBaseInterfaceData, PreviousBaseLocation, OldFloor, true);
 				remainingTime = 0.f;
 				break;
 			}
@@ -508,28 +516,20 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 					HandleWalkingOffLedge(OldFloor.HitResult.ImpactNormal, OldFloor.HitResult.Normal, OldLocation, timeTick);
 					if (IsMovingOnGround())
 					{
-						// TODO Start of custom ALS code block.
-
-						ApplyPendingPenetrationAdjustment();
-
-						// TODO End of custom ALS code block.
-
 						// If still walking, then fall. If not, assume the user set a different mode they want to keep.
 						StartFalling(Iterations, remainingTime, timeTick, Delta, OldLocation);
 					}
 					return;
 				}
 
-				// TODO Start of custom ALS code block.
-
-				ApplyPendingPenetrationAdjustment();
-
-				// TODO End of custom ALS code block.
-
 				AdjustFloorHeight();
-				SetBase(CurrentFloor.HitResult.Component.Get(), CurrentFloor.HitResult.BoneName);
+				SetBaseFromFloor(CurrentFloor);
 			}
-			else if (CurrentFloor.HitResult.bStartPenetrating && remainingTime <= 0.f)
+
+			// Always resolve penetration, even if the floor is walkable.
+
+			if ((bAllowImprovedPenetrationAdjustment || !CurrentFloor.IsWalkableFloor()) &&
+			    CurrentFloor.HitResult.bStartPenetrating && remainingTime <= 0.f)
 			{
 				// The floor check failed because it started in penetration
 				// We do not want to try to move downward because the downward sweep failed, rather we'd like to try to pop out of the floor.
@@ -550,7 +550,8 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 			// See if we need to start falling.
 			if (!CurrentFloor.IsWalkableFloor() && !CurrentFloor.HitResult.bStartPenetrating)
 			{
-				const bool bMustJump = bJustTeleported || bZeroDelta || (OldBase == NULL || (!OldBase->IsQueryCollisionEnabled() && MovementBaseUtility::IsDynamicBase(OldBase)));
+				const bool bOldMovementBaseValid = OldMovementBaseInterfaceData && OldMovementBaseInterfaceData->IsValid();
+				const bool bMustJump = bJustTeleported || bZeroDelta || (!bOldMovementBaseValid || (!CollisionEnabledHasQuery(OldMovementBaseInterfaceData->GetBodyInstanceOwner()->GetCollisionEnabled()) && MovementBaseUtility::IsDynamicBase(OldMovementBaseInterfaceData)));
 				if ((bMustJump || !bCheckedFall) && CheckFall(OldFloor, CurrentFloor.HitResult, Delta, OldLocation, remainingTime, timeTick, Iterations, bMustJump) )
 				{
 					return;
@@ -636,7 +637,7 @@ void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLoca
 
 	// ReSharper disable All
 
-	// UE_LOG(LogCharacterMovement, VeryVerbose, TEXT("[Role:%d] ComputeFloorDist: %s at location %s"), (int32)CharacterOwner->GetLocalRole(), *GetNameSafe(CharacterOwner), *CapsuleLocation.ToString());
+	// UE_LOGF(LogCharacterMovement, VeryVerbose, "[Role:%d] ComputeFloorDist: %ls at location %ls", (int32)CharacterOwner->GetLocalRole(), *GetNameSafe(CharacterOwner), *CapsuleLocation.ToString());
 	OutFloorResult.Clear();
 
 	float PawnRadius, PawnHalfHeight;
@@ -702,12 +703,6 @@ void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLoca
 
 		FHitResult Hit(1.f);
 		bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + TraceDist * GetGravityDirection(), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
-
-		// TODO Start of custom ALS code block.
-
-		const_cast<ThisClass*>(this)->SavePenetrationAdjustment(Hit);
-
-		// TODO End of custom ALS code block.
 
 		if (bBlockingHit)
 		{
@@ -779,7 +774,22 @@ void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLoca
 				OutFloorResult.bBlockingHit = true;
 				if (LineResult <= LineDistance && IsWalkable(Hit))
 				{
+					// Keep the data from the previous sweep test, which will be required later to properly resolve
+					// penetration in the UCharacterMovementComponent::PhysWalking() function. By default, penetration
+					// is only resolved when line trace starts in penetration and the sweep test is ignored.
+
+					const auto NormalPrevious{OutFloorResult.HitResult.Normal};
+					const auto PenetrationDepthPrevious{OutFloorResult.HitResult.PenetrationDepth};
+					const auto bStartPenetratingPrevious{OutFloorResult.HitResult.bStartPenetrating};
+					const auto HitObjectHandlePrevious{OutFloorResult.HitResult.HitObjectHandle};
+
 					OutFloorResult.SetFromLineTrace(Hit, OutFloorResult.FloorDist, LineResult, true);
+
+					OutFloorResult.HitResult.Normal = NormalPrevious;
+					OutFloorResult.HitResult.PenetrationDepth = PenetrationDepthPrevious;
+					OutFloorResult.HitResult.bStartPenetrating = bStartPenetratingPrevious;
+					OutFloorResult.HitResult.HitObjectHandle = HitObjectHandlePrevious;
+
 					return;
 				}
 			}
@@ -851,7 +861,7 @@ void UAlsCharacterMovementComponent::SmoothClientPosition(const float DeltaTime)
 void UAlsCharacterMovementComponent::MoveAutonomous(const float ClientTimeStamp, const float DeltaTime,
                                                     const uint8 CompressedFlags, const FVector& NewAcceleration)
 {
-	const auto* MoveData{static_cast<FAlsCharacterNetworkMoveData*>(GetCurrentNetworkMoveData())};
+	const auto* MoveData{static_cast<FAlsCharacterNetworkMoveData*>(GetCurrentNetworkMoveData())}; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
 	if (MoveData != nullptr)
 	{
 		RotationMode = MoveData->RotationMode;
@@ -874,32 +884,11 @@ void UAlsCharacterMovementComponent::MoveAutonomous(const float ClientTimeStamp,
 		auto* Character{Cast<AAlsCharacter>(CharacterOwner)};
 		if (IsValid(Character))
 		{
-			Character->CorrectViewNetworkSmoothing(NewControlRotation, false);
+			Character->CorrectViewNetworkSmoothing(NewControlRotation);
 		}
 
 		PreviousControlRotation = NewControlRotation;
 	}
-}
-
-void UAlsCharacterMovementComponent::SavePenetrationAdjustment(const FHitResult& Hit)
-{
-	if (bAllowImprovedPenetrationAdjustment && Hit.bStartPenetrating)
-	{
-		PendingPenetrationAdjustment = Hit.Normal * Hit.PenetrationDepth;
-	}
-}
-
-void UAlsCharacterMovementComponent::ApplyPendingPenetrationAdjustment()
-{
-	if (PendingPenetrationAdjustment.IsNearlyZero())
-	{
-		return;
-	}
-
-	ResolvePenetration(ConstrainDirectionToPlane(PendingPenetrationAdjustment),
-	                   CurrentFloor.HitResult, UpdatedComponent->GetComponentQuat());
-
-	PendingPenetrationAdjustment = FVector::ZeroVector;
 }
 
 void UAlsCharacterMovementComponent::SetMovementSettings(UAlsMovementSettings* NewMovementSettings)
@@ -924,7 +913,7 @@ void UAlsCharacterMovementComponent::RefreshGaitSettings()
 	GaitSettings = ALS_ENSURE(NewGaitSettings != nullptr) ? *NewGaitSettings : FAlsMovementGaitSettings{};
 }
 
-void UAlsCharacterMovementComponent::SetRotationMode(const FGameplayTag& NewRotationMode)
+void UAlsCharacterMovementComponent::SetRotationMode(const FGameplayTag NewRotationMode)
 {
 	if (RotationMode != NewRotationMode)
 	{
@@ -934,7 +923,7 @@ void UAlsCharacterMovementComponent::SetRotationMode(const FGameplayTag& NewRota
 	}
 }
 
-void UAlsCharacterMovementComponent::SetStance(const FGameplayTag& NewStance)
+void UAlsCharacterMovementComponent::SetStance(const FGameplayTag NewStance)
 {
 	if (Stance != NewStance)
 	{
@@ -964,14 +953,14 @@ void UAlsCharacterMovementComponent::RefreshGroundedMovementSettings()
 		// Ideally we should use actor rotation here instead of view rotation, but we can't do that because ALS has
 		// full control over actor rotation and it is not synchronized over the network, so it would cause jitter.
 
-		const auto RelativeViewRotation{UAlsRotation::GetTwist(ViewRotation.Quaternion(), -GetGravityDirection())};
+		const auto ViewRotationGravitySpace{UAlsRotation::GetTwist(ViewRotation.Quaternion(), -GetGravityDirection())};
 
-		const FVector2D RelativeVelocity{RelativeViewRotation.UnrotateVector(Velocity)};
-		const auto VelocityAngle{UAlsVector::DirectionToAngle(RelativeVelocity)};
+		const FVector2D VelocityViewSpace{ViewRotationGravitySpace.UnrotateVector(Velocity)};
+		const auto VelocityYawAngleViewSpace{UAlsVector::DirectionToAngle(VelocityViewSpace)};
 
 		const auto ForwardSpeedAmount{
-			FMath::GetMappedRangeValueClamped(MovementSettings->VelocityAngleToSpeedInterpolationRange,
-			                                  {1.0f, 0.0f}, FMath::Abs(VelocityAngle))
+			1.0f - UAlsMath::Clamp01(MovementSettings->VelocityAngleToSpeedInterpolationRange
+			                                         .GetRangePct(static_cast<float>(FMath::Abs(VelocityYawAngleViewSpace))))
 		};
 
 		WalkSpeed = FMath::Lerp(GaitSettings.WalkBackwardSpeed, GaitSettings.WalkForwardSpeed, ForwardSpeedAmount);

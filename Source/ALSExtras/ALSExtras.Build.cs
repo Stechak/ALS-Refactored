@@ -2,22 +2,27 @@ using UnrealBuildTool;
 
 public class ALSExtras : ModuleRules
 {
-	public ALSExtras(ReadOnlyTargetRules Target) : base(Target)
+	public ALSExtras(ReadOnlyTargetRules target) : base(target)
 	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 
-		bEnableNonInlinedGenCppWarnings = true;
-		// UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+		// if (Target.bBuildEditor)
+		// {
+		// 	// Verify that all source files include all required dependencies.
+		//
+		// 	bUseUnity = false;
+		// 	PCHUsage = PCHUsageMode.NoPCHs;
+		// }
 
-		PublicDependencyModuleNames.AddRange(new[]
-		{
+		// CppCompileWarningSettings.UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+		CppCompileWarningSettings.NonInlinedGenCppWarningLevel = WarningLevel.Warning;
+
+		PublicDependencyModuleNames.AddRange([
 			"Core", "CoreUObject", "Engine", "AIModule", "ALS"
-		});
+		]);
 
-		PrivateDependencyModuleNames.AddRange(new[]
-		{
+		PrivateDependencyModuleNames.AddRange([
 			"EnhancedInput", "ALSCamera"
-		});
+		]);
 	}
 }
