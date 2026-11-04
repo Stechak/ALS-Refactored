@@ -394,7 +394,9 @@ void AAlsCharacter::RefreshMeshProperties() const
 		}
 	}
 
-	if (!bMeshIsTicking)
+	// The animation instance can be missing when the mesh runs a non-ALS anim instance (e.g. a single-node
+	// animation on a static dummy); BeginPlay only ensures on it, so don't crash here.
+	if (!bMeshIsTicking && AnimationInstance.IsValid())
 	{
 		AnimationInstance->MarkPendingUpdate();
 	}
@@ -1827,6 +1829,14 @@ void AAlsCharacter::RefreshInAirRotation(const float DeltaTime)
 {
 	if (LocomotionAction.IsValid() || LocomotionMode != AlsLocomotionModeTags::InAir)
 	{
+		return;
+	}
+
+	// Archrune: like grounded rotation, leave airborne root motion (attack leaps, dives) alone; otherwise the
+	// in-air rotation mode steers the actor mid-move and bends the root motion off course.
+	if (HasAnyRootMotion())
+	{
+		RefreshTargetYawAngleUsingActorRotation();
 		return;
 	}
 
