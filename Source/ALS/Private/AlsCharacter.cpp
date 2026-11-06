@@ -138,7 +138,6 @@ void AAlsCharacter::BeginPlay()
 {
 	ALS_ENSURE(IsValid(Settings));
 	ALS_ENSURE(IsValid(MovementSettings));
-	std::ignore = ALS_ENSURE(AnimationInstance.IsValid());
 
 	ALS_ENSURE_MESSAGE(!bUseControllerRotationPitch && !bUseControllerRotationYaw && !bUseControllerRotationRoll, // NOLINT(clang-diagnostic-unused-value)
 	                   TEXT("These settings are not allowed and must be turned off!"));
@@ -394,8 +393,7 @@ void AAlsCharacter::RefreshMeshProperties() const
 		}
 	}
 
-	// The animation instance can be missing when the mesh runs a non-ALS anim instance (e.g. a single-node
-	// animation on a static dummy); BeginPlay only ensures on it, so don't crash here.
+	// The animation instance can be missing when the mesh runs a non-ALS anim instance, which enemies do, so don't crash here.
 	if (!bMeshIsTicking && AnimationInstance.IsValid())
 	{
 		AnimationInstance->MarkPendingUpdate();
